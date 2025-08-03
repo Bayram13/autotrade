@@ -1,26 +1,27 @@
-from telethon import TelegramClient, events
+import os
 import re
-import requests
 import time
 import hmac
 import hashlib
-import os
+import requests
+import threading
+from telethon import TelegramClient, events
+from flask import Flask
 from dotenv import load_dotenv
 
-# ====== .env faylını yüklə ======
+# ====== ENV faylını yüklə ======
 load_dotenv()
 
 # ====== Telegram API məlumatları ======
 TG_API_ID = int(os.getenv("TG_API_ID"))
 TG_API_HASH = os.getenv("TG_API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Telegram Bot Token
-SESSION_NAME = "bingx_bot"
+SESSION_NAME = 'bingx_bot'
 
 # ====== BingX API məlumatları ======
 API_KEY = os.getenv("BINGX_API_KEY")
 SECRET_KEY = os.getenv("BINGX_SECRET_KEY")
 
-# ====== Siqnal gələn qrup ID və ya istifadəçi adı ======
+# ====== Siqnal gələn qrup ======
 SOURCE_CHAT = int(os.getenv("SOURCE_CHAT_ID"))  # məsələn: -1001234567890
 
 # ====== BingX imza funksiyası ======
@@ -44,44 +45,26 @@ def place_order(symbol, side, price, qty):
     r = requests.post(url, params=params, headers=headers)
     print("📤 BingX cavabı:", r.json())
 
-# ====== Siqnal mesajını oxuma ======
+# ====== Mesajdan məlumat çıxarma ======
 def parse_signal(msg):
     try:
-        # Simvol (BTCUSDT, SXTUSDT və s.)
-        symbol_match = re.search(r'([A-Z]{3,5}USDT)', msg)
-        if not symbol_match:
-            return None
-        symbol = symbol_match.group(1)
-
-        # Yön (LONG/SHORT → BUY/SELL)
-        if "LONG" in msg.upper():
-            side = "BUY"
-        elif "SHORT" in msg.upper():
-            side = "SELL"
-        else:
-            return None
-
-        # Giriş qiyməti
-        entry_match = re.search(r'(GİRİŞ|ENTRY)[: ]+(\d+\.?\d*)', msg, re.IGNORECASE)
-        if not entry_match:
-            return None
-        entry = float(entry_match.group(2))
-
-        # TP qiyməti
-        tp_match = re.search(r'TP[: ]+(\d+\.?\d*)', msg, re.IGNORECASE)
-        tp = float(tp_match.group(1)) if tp_match else None
-
-        # SL qiyməti
-        sl_match = re.search(r'SL[: ]+(\d+\.?\d*)', msg, re.IGNORECASE)
-        sl = float(sl_match.group(1)) if sl_match else None
-
+        # Simvolu tap (məs: SXTUSDT)
+        symbol = re.search(r'([A-Z]{3,5}USDT)', msg).group(1)
+        # Long / Short müəyyən et
+        side = 'BUY' if 'LONG' in msg.upper() else 'SELL'
+        # Entry qiyməti
+        entry = float(re.search(r'(GİRİŞ|ENTRY)[: ]+(\d+\.?\d*)', msg, re.IGNORECASE).group(2))
+        # TP / SL
+        tp = re.search(r'TP[: ]+(\d+\.?\d*)', msg, re.IGNORECASE)
+        sl = re.search(r'SL[: ]+(\d+\.?\d*)', msg, re.IGNORECASE)
+        tp = float(tp.group(1)) if tp else None
+        sl = float(sl.group(1)) if sl else None
         return symbol, side, entry, tp, sl
-    except Exception as e:
-        print("❌ Parse xətası:", e)
+    except:
         return None
 
-# ====== Telegram Client (Bot Token ilə) ======
-client = TelegramClient(SESSION_NAME, TG_API_ID, TG_API_HASH).start(bot_token=BOT_TOKEN)
+# ====== Telegram Client ======
+client = TelegramClient(SESSION_NAME, TG_API_ID, TG_API_HASH)
 
 @client.on(events.NewMessage(chats=SOURCE_CHAT))
 async def handler(event):
@@ -90,8 +73,23 @@ async def handler(event):
     if signal:
         symbol, side, entry, tp, sl = signal
         print(f"✅ Siqnal tapıldı: {symbol} {side} Entry={entry} TP={tp} SL={sl}")
-        # Məsələn 0.01 miqdar ilə əməliyyat açır
         place_order(symbol.replace("USDT", "-USDT"), side, entry, 0.01)
 
-print("📡 Bot işə düşdü... Siqnalları gözləyir.")
-client.run_until_disconnected()
+# ====== Telegram botu arxa planda işə sal ======
+def start_telegram():
+    client.start()
+    print("📡 Telegram bot başladı...")
+    client.run_until_disconnected()
+
+threading.Thread(target=start_telegram, daemon=True).start()
+
+# ====== Flask Web Server ======
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "✅ Bot işləyir və Telegram siqnallarını izləyir."
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
