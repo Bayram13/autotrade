@@ -1,6 +1,7 @@
 services:
-  - type: worker
-    name: bingx-signal-bot
+  - type: web
+    name: bingx-bot
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
