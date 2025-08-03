@@ -1,21 +1,6 @@
 services:
   - type: worker
-    name: bingx-auto-trade
+    name: bingx-signal-bot
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
-    envVars:
-      - key: TG_API_ID
-        sync: false
-      - key: TG_API_HASH
-        sync: false
-      - key: SESSION_NAME
-        value: bingx_bot
-      - key: BINGX_API_KEY
-        sync: false
-      - key: BINGX_SECRET_KEY
-        sync: false
-      - key: SOURCE_CHAT
-        sync: false
-      - key: TRADE_QTY
-        value: "0.01"
