@@ -1,5 +1,5 @@
 telethon==1.40.0
 python-dotenv==1.0.1
-pybit==2.4.0
+pybit==5.6.2
 fastapi==0.115.0
 uvicorn==0.30.0
